@@ -72,6 +72,39 @@ export default function (pi: ExtensionAPI) {
 		watching = "";
 	};
 
+	// Start (or replace) the resident watcher for <name>. watch.sh writes the
+	// spawn readiness sentinel when it attaches, so a seat is only "ready" once
+	// this has run.
+	const startWatcher = (name: string, ctx: { cwd: string; sessionManager: { getSessionId(): string } }): ChildProcess => {
+		stopWatcher();
+		const session = ctx.sessionManager.getSessionId() || "-";
+		const child = spawn(
+			join(SKILL_DIR, "scripts", "watch.sh"),
+			[session, projectPath(ctx.cwd), "pi", name],
+			{ cwd: ctx.cwd, stdio: ["ignore", "pipe", "ignore"] },
+		);
+		let buffered = "";
+		child.stdout?.setEncoding("utf-8");
+		child.stdout?.on("data", (chunk: string) => {
+			buffered += chunk;
+			let nl: number;
+			while ((nl = buffered.indexOf("\n")) >= 0) {
+				const line = buffered.slice(0, nl).trim();
+				buffered = buffered.slice(nl + 1);
+				if (line) inject(line);
+			}
+		});
+		child.on("exit", (code) => {
+			if (watcher !== child) return;
+			watcher = undefined;
+			watching = "";
+			inject(`inbox watcher for ${name} exited (code ${code}); call agmsg_watch again to re-arm it`);
+		});
+		watcher = child;
+		watching = name;
+		return child;
+	};
+
 	pi.registerTool(
 		defineTool({
 			name: "agmsg_watch",
@@ -91,32 +124,7 @@ export default function (pi: ExtensionAPI) {
 						details: { started: false, mode },
 					};
 				}
-				stopWatcher();
-				const session = ctx.sessionManager.getSessionId() || "-";
-				const child = spawn(
-					join(SKILL_DIR, "scripts", "watch.sh"),
-					[session, projectPath(ctx.cwd), "pi", params.name],
-					{ cwd: ctx.cwd, stdio: ["ignore", "pipe", "ignore"] },
-				);
-				let buffered = "";
-				child.stdout?.setEncoding("utf-8");
-				child.stdout?.on("data", (chunk: string) => {
-					buffered += chunk;
-					let nl: number;
-					while ((nl = buffered.indexOf("\n")) >= 0) {
-						const line = buffered.slice(0, nl).trim();
-						buffered = buffered.slice(nl + 1);
-						if (line) inject(line);
-					}
-				});
-				child.on("exit", (code) => {
-					if (watcher !== child) return;
-					watcher = undefined;
-					watching = "";
-					inject(`inbox watcher for ${params.name} exited (code ${code}); call agmsg_watch again to re-arm it`);
-				});
-				watcher = child;
-				watching = params.name;
+				const child = startWatcher(params.name, ctx);
 				return {
 					content: [{ type: "text", text: `agmsg inbox stream (acting as ${params.name}) started` }],
 					details: { started: true, mode, name: params.name, pid: child.pid },
@@ -171,6 +179,24 @@ export default function (pi: ExtensionAPI) {
 				if (text) inject(text);
 			},
 		);
+	});
+
+	// A resumed session (spawn/restart with --session) is a new pi process: no
+	// watcher runs, and the model may skip agmsg_watch because the history shows
+	// it already ran, leaving spawn waiting for a readiness sentinel until it
+	// times out (Issue kappaseijin/agguild#230, nago restart). Re-arm from the
+	// session's own record: the last agmsg_watch result on this branch names the
+	// role, unless a later agmsg_watch_stop cleared it.
+	pi.on("session_start", async (_event, ctx) => {
+		if (deliveryMode(ctx.cwd) !== "monitor") return;
+		let name = "";
+		for (const entry of ctx.sessionManager.getBranch() as any[]) {
+			const msg = entry?.type === "message" ? entry.message : undefined;
+			if (!msg || msg.role !== "toolResult") continue;
+			if (msg.toolName === "agmsg_watch" && msg.details?.started && msg.details?.name) name = msg.details.name;
+			if (msg.toolName === "agmsg_watch_stop" && msg.details?.stopped) name = "";
+		}
+		if (name) startWatcher(name, ctx);
 	});
 
 	pi.on("session_shutdown", async () => {
