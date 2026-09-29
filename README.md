@@ -215,7 +215,7 @@ codex:
   --dangerously-skip-permissions: false  # a `false` value suppresses the flag entirely
 ```
 
-Eight of the ten agent types are spawnable — `claude-code`, `codex`, `grok-build`, `cursor`, `gemini`, `antigravity`, `copilot`, `opencode`. `hermes` is not spawnable because its CLI has no known mode that starts an interactive session pre-seeded with an initial prompt (#279). `devin` is currently not marked spawnable because an equivalent interactive boot mode has not yet been verified. macOS is the primary target; Linux and Windows are best-effort (please open an issue/PR if your terminal isn't handled). Headless environments — no tmux **and** no usable terminal — error out, since the agent CLIs need an interactive terminal.
+Nine of the eleven agent types are spawnable — `claude-code`, `codex`, `grok-build`, `cursor`, `gemini`, `antigravity`, `copilot`, `opencode`, `pi`. `hermes` is not spawnable because its CLI has no known mode that starts an interactive session pre-seeded with an initial prompt (#279). `devin` is currently not marked spawnable because an equivalent interactive boot mode has not yet been verified. macOS is the primary target; Linux and Windows are best-effort (please open an issue/PR if your terminal isn't handled). Headless environments — no tmux **and** no usable terminal — error out, since the agent CLIs need an interactive terminal.
 
 ### Tear down a spawned agent (`despawn`)
 
@@ -351,6 +351,16 @@ Install with `./install.sh` (when `~/.config/opencode/` exists, the OpenCode-typ
 This makes OpenCode useful as a local coding agent, including configurations backed by local providers such as Ollama.
 
 See [docs/opencode.md](docs/opencode.md) for full setup instructions.
+
+### pi
+
+```
+/skill:agmsg
+```
+
+Install with `./install.sh`. When pi's config root (`~/.pi/agent/`, or `$PI_CODING_AGENT_DIR`) exists, the installer places a pi-typed skill at `skills/agmsg/SKILL.md` and a delivery extension at `extensions/agmsg/index.ts` there; the Codex-typed shared skill is left as it is. pi supports `mode monitor` (the extension's `agmsg_watch` tool streams `watch.sh` into the conversation), `mode turn` (the extension checks the inbox after each run), and `mode off`. `spawn pi` passes the actas prompt as pi's positional message (`/skill:agmsg actas <name>`) and resumes a seat with `--session <id>`. `both` is not supported.
+
+See [docs/pi.md](docs/pi.md) for details.
 
 ### Shell (any agent)
 

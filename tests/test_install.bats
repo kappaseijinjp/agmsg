@@ -19,6 +19,9 @@ setup() {
   # accumulated inside a real ~/.codex_profiles/*/config.toml. Only the test
   # that exercises CODEX_HOME itself sets it, scoped to that one invocation.
   unset CODEX_HOME
+  # pi resolves its config root from PI_CODING_AGENT_DIR before ~/.pi/agent;
+  # left ambient, the pi install tests would write outside FAKE_HOME.
+  unset PI_CODING_AGENT_DIR
   # Pin bare instance-id keying (#93) so the watcher self-clean smoke test keys
   # its pidfile on the raw session_id it passes — deterministic in CI and when
   # the suite runs under an agent process.
@@ -774,6 +777,69 @@ wait_for_pidfile_pid() {
   rm -rf "$FAKE_HOME/.config/opencode"
   HOME="$FAKE_HOME" bash "$REPO_ROOT/install.sh" --cmd agmsg
   [ ! -d "$FAKE_HOME/.config/opencode/skills/agmsg" ]
+}
+
+@test "install: drops a pi SKILL.md and delivery extension when ~/.pi/agent exists" {
+  mkdir -p "$FAKE_HOME/.pi/agent"
+  HOME="$FAKE_HOME" bash "$REPO_ROOT/install.sh" --cmd agmsg
+  local skill="$FAKE_HOME/.pi/agent/skills/agmsg/SKILL.md"
+  local ext="$FAKE_HOME/.pi/agent/extensions/agmsg/index.ts"
+  [ -f "$skill" ]
+  grep -q "whoami.sh \"\$(pwd)\" pi" "$skill"
+  refute grep -q "whoami.sh \"\$(pwd)\" codex" "$skill"
+  grep -q "^name: agmsg" "$skill"
+  grep -Fq '/skill:agmsg drop' "$skill"
+  [ -f "$ext" ]
+  grep -Fq "const SKILL_DIR = \"$SK\";" "$ext"
+  refute grep -q '__SKILL_DIR__\|__SKILL_NAME__' "$ext"
+}
+
+@test "install: honors PI_CODING_AGENT_DIR for the pi skill and extension" {
+  local pi_root="$FAKE_HOME/custom-pi"
+  mkdir -p "$pi_root"
+  HOME="$FAKE_HOME" PI_CODING_AGENT_DIR="$pi_root" bash "$REPO_ROOT/install.sh" --cmd agmsg
+  [ -f "$pi_root/skills/agmsg/SKILL.md" ]
+  [ -f "$pi_root/extensions/agmsg/index.ts" ]
+  [ ! -d "$FAKE_HOME/.pi" ]
+}
+
+@test "install: skips pi files when the pi config root is absent" {
+  HOME="$FAKE_HOME" bash "$REPO_ROOT/install.sh" --cmd agmsg
+  [ ! -d "$FAKE_HOME/.pi" ]
+}
+
+@test "install --agent-type pi: leaves the shared SKILL.md Codex-typed (pi has its own file)" {
+  mkdir -p "$FAKE_HOME/.pi/agent"
+  HOME="$FAKE_HOME" bash "$REPO_ROOT/install.sh" --cmd agmsg --agent-type pi
+  refute grep -q "whoami.sh \"\$(pwd)\" pi" "$SK/SKILL.md"
+  grep -q "whoami.sh \"\$(pwd)\" pi" "$FAKE_HOME/.pi/agent/skills/agmsg/SKILL.md"
+}
+
+@test "install --update: refreshes the pi skill and extension" {
+  mkdir -p "$FAKE_HOME/.pi/agent"
+  HOME="$FAKE_HOME" bash "$REPO_ROOT/install.sh" --cmd agmsg
+  echo tampered > "$FAKE_HOME/.pi/agent/skills/agmsg/SKILL.md"
+  echo tampered > "$FAKE_HOME/.pi/agent/extensions/agmsg/index.ts"
+  HOME="$FAKE_HOME" bash "$REPO_ROOT/install.sh" --update
+  grep -q "whoami.sh \"\$(pwd)\" pi" "$FAKE_HOME/.pi/agent/skills/agmsg/SKILL.md"
+  grep -Fq "const SKILL_DIR = \"$SK\";" "$FAKE_HOME/.pi/agent/extensions/agmsg/index.ts"
+}
+
+@test "uninstall: removes the pi skill and this install's pi extension" {
+  mkdir -p "$FAKE_HOME/.pi/agent"
+  HOME="$FAKE_HOME" bash "$REPO_ROOT/install.sh" --cmd agmsg
+  HOME="$FAKE_HOME" bash "$REPO_ROOT/uninstall.sh" --yes
+  [ ! -e "$FAKE_HOME/.pi/agent/skills/agmsg" ]
+  [ ! -e "$FAKE_HOME/.pi/agent/extensions/agmsg" ]
+}
+
+@test "uninstall: keeps a pi extension that names another install" {
+  mkdir -p "$FAKE_HOME/.pi/agent"
+  HOME="$FAKE_HOME" bash "$REPO_ROOT/install.sh" --cmd agmsg
+  local ext="$FAKE_HOME/.pi/agent/extensions/agmsg/index.ts"
+  sed -i.bak 's|^const SKILL_DIR = .*|const SKILL_DIR = "/elsewhere/agmsg";|' "$ext" && rm -f "$ext.bak"
+  HOME="$FAKE_HOME" bash "$REPO_ROOT/uninstall.sh" --yes
+  [ -f "$ext" ]
 }
 
 @test "install --update: refreshes the OpenCode skill if it was previously installed" {
@@ -1720,7 +1786,7 @@ EOF
 #
 # #1449 split what "the type" means here for this file specifically: a type
 # with its OWN dedicated file (claude-code, copilot, opencode, hermes,
-# grok-build, antigravity -- AGMSG_TYPES_WITH_OWN_SKILL_FILE in install.sh,
+# grok-build, antigravity, pi -- AGMSG_TYPES_WITH_OWN_SKILL_FILE in install.sh,
 # kept in sync with the list below) never retypes the SHARED SKILL.md away
 # from codex in the first place, so the expectation for those is codex, not
 # $t. Staying codex across the bare --update is still exactly what #846
@@ -1728,7 +1794,7 @@ EOF
 # later run either.
 @test "install: bare --update preserves every renderable type's SKILL.md flavor (#846, #1449)" {
   local t dedicated expect
-  dedicated=" claude-code copilot opencode hermes grok-build antigravity "
+  dedicated=" claude-code copilot opencode hermes grok-build antigravity pi "
   while IFS= read -r t; do
     local cmd="agmsg-$t"
     expect="$t"

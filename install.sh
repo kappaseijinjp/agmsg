@@ -49,6 +49,7 @@ agmsg_load_renderable_skill_types
 #   hermes       -> $HERMES_SKILL_DIR/SKILL.md
 #   grok-build   -> $GROK_SKILL_DIR/SKILL.md
 #   antigravity  -> ~/.gemini/config/skills/<cmd>/SKILL.md (install_antigravity_skill)
+#   pi           -> ~/.pi/agent/skills/<cmd>/SKILL.md (install_pi_files)
 #
 # The shared ~/.agents/skills/<cmd>/SKILL.md can hold only ONE type's
 # instructions at a time, and it is what any type NOT in this list reads as
@@ -64,7 +65,7 @@ agmsg_load_renderable_skill_types
 # Adding a new type's OWN dedicated file at a new site below means adding
 # that type here too, or it will keep silently retyping the shared file the
 # way #1449 describes.
-AGMSG_TYPES_WITH_OWN_SKILL_FILE="claude-code copilot opencode hermes grok-build antigravity"
+AGMSG_TYPES_WITH_OWN_SKILL_FILE="claude-code copilot opencode hermes grok-build antigravity pi"
 
 # Resolve a provenance version for the source being installed, so an installed
 # copy is uniquely identifiable even between tagged releases (the canonical
@@ -455,6 +456,32 @@ install_antigravity_tui_shim() {
   fi
 }
 
+install_pi_files() {
+  # pi reads global skills from ~/.pi/agent/skills/ ahead of ~/.agents/skills/
+  # (pi docs/skills.md; on a name collision the first one found wins), so a
+  # pi-typed SKILL.md there keeps a pi session from reading the Codex-typed
+  # shared file. Delivery runs through a global pi extension: a project-local
+  # .pi/extensions entry would wait on pi's project-trust prompt. The pi config
+  # root honors PI_CODING_AGENT_DIR the way pi itself does.
+  local pi_root="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
+  [ -d "$pi_root" ] || return 0
+  local skill_dir="$pi_root/skills/$CMD_NAME"
+  local ext_dir="$pi_root/extensions/$CMD_NAME"
+  local src="$SCRIPT_DIR/scripts/drivers/types/pi/agmsg-extension.ts"
+  local tmp
+  mkdir -p "$skill_dir" "$ext_dir"
+  agmsg_render_skill pi "$CMD_NAME" "$skill_dir/SKILL.md"
+  tmp="$(mktemp "$ext_dir/index.ts.tmp.XXXXXX")" || return 1
+  if ! SKILL_DIR_VALUE="$SKILL_DIR" SKILL_NAME_VALUE="$CMD_NAME" awk '
+      { gsub(/__SKILL_DIR__/, ENVIRON["SKILL_DIR_VALUE"]);
+        gsub(/__SKILL_NAME__/, ENVIRON["SKILL_NAME_VALUE"]); print }' "$src" > "$tmp"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  mv -f "$tmp" "$ext_dir/index.ts"
+  echo "  + installed /skill:$CMD_NAME skill and delivery extension to ${pi_root/#$HOME/~}/"
+}
+
 install_antigravity_skill() {
   # Antigravity looks for global skills under ~/.gemini/config/skills, not the
   # cross-vendor ~/.agents/skills tree. Treat either of the installed agy
@@ -481,7 +508,7 @@ while [[ $# -gt 0 ]]; do
       echo "Options:"
       echo "  --cmd <name>      Command & skill folder name (default: agmsg)"
       echo "                    Claude Code: /<cmd>, Codex/Gemini/Antigravity: \$<cmd>"
-      echo "  --agent-type <t>  Agent type: claude-code, codex, gemini, antigravity, opencode, hermes, cursor, grok-build, devin"
+      echo "  --agent-type <t>  Agent type: claude-code, codex, gemini, antigravity, opencode, hermes, cursor, grok-build, devin, pi"
       echo "                    codex, gemini, cursor, devin: selects the template the"
       echo "                    shared SKILL.md is rendered from. Other types leave the"
       echo "                    shared SKILL.md's type unchanged (codex on a fresh install);"
@@ -720,6 +747,7 @@ $_agmsg_running_team"
     agmsg_render_skill grok-build "$SKILL_NAME" "$GROK_SKILL_DIR/SKILL.md"
   fi
   install_antigravity_skill
+  install_pi_files
   cp "$SCRIPT_DIR/openai.yaml" "$SKILL_DIR/agents/openai.yaml" 2>/dev/null || true
   # A team config written by an older release can be group- or world-writable,
   # and the sync engine refuses to read one that is (#804). Upgrading does not
@@ -1051,6 +1079,11 @@ fi
 # either path is a sufficient installation signal.
 install_antigravity_skill
 
+# --- Install pi skill and delivery extension ---
+# Gated on pi's own config root (~/.pi/agent or PI_CODING_AGENT_DIR); see
+# install_pi_files.
+install_pi_files
+
 # Codex sandbox writable_roots are configured by configure_codex_sandbox() at
 # the "Done" step below — the single source of truth for db/, teams/, and run/.
 # (A legacy inline copy used to run here too, which double-mutated the array and
@@ -1070,6 +1103,7 @@ echo "       Gemini CLI:   \$$CMD_NAME"
 echo "       Antigravity:  \$$CMD_NAME"
 echo "       Copilot CLI:  /$CMD_NAME"
 echo "       OpenCode:     \$$CMD_NAME"
+echo "       pi:           /skill:$CMD_NAME"
 echo "       It will prompt for team name and agent name on first run."
 echo ""
 echo "  Docs: https://agmsg.cc/"
