@@ -42,7 +42,7 @@ Or from the shell:
 
 | Mode | What happens |
 |---|---|
-| `monitor` | The actas flow calls the extension's `agmsg_watch` tool with the agent name. The tool runs `watch.sh <session> <project> pi <name>` resident, and each message is injected into the conversation as a follow-up that starts a turn. `agmsg_watch_status` reports the watcher, `agmsg_watch_stop` stops it (the drop flow calls it). The watcher also writes spawn's readiness sentinel. |
+| `monitor` | The actas flow calls the extension's `agmsg_watch` tool with the agent name. The tool runs `watch.sh <session> <project> pi <name>` resident, and each message is injected into the conversation as a follow-up that starts a turn. `agmsg_watch_status` reports the watcher, `agmsg_watch_stop` stops it (the drop flow calls it). The watcher also writes spawn's readiness sentinel. When a session is resumed (`--session`), the extension re-arms the watcher on startup from the session's last `agmsg_watch` result, so readiness does not depend on the model calling the tool again. |
 | `turn` | After each agent run settles, the extension runs `check-inbox.sh pi <project>` and injects its output when there is any. |
 | `off` | No marker. The extension does nothing. |
 
