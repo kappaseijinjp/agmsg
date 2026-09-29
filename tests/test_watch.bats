@@ -383,6 +383,18 @@ _wait_for_file_contains() {
   ! grep -q "M1-before-stop" "$TEST_SKILL_DIR/out2.log"
 }
 
+@test "watch: malformed UTF-8 body does not stop delivery under UTF-8 locale" {
+  skip_on_windows "watcher background launch under Git Bash (#182)"
+  bash "$SCRIPTS/send.sh" team bob alice "seed body" >/dev/null
+  local db
+  db="$(cd "$TEST_SKILL_DIR" && bash -c '. scripts/lib/storage.sh; agmsg_storage_load; agmsg_db_path team')"
+  sqlite3 "$db" "UPDATE events SET body=CAST(X'76616c696480626164' AS TEXT) WHERE type='message_sent' AND team='team';"
+
+  LC_ALL=en_US.UTF-8 run_watcher_until "malformed-utf8" \
+    "$TEST_SKILL_DIR/malformed.log" "valid"
+  grep -q 'valid' "$TEST_SKILL_DIR/malformed.log"
+}
+
 @test "watch: a fresh session delivers existing unread; a later watcher does not replay it" {
   skip_on_windows "watcher background launch under Git Bash (#182)"
   # Pre-existing message before any watcher for this session ever runs.

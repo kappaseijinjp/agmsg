@@ -55,6 +55,21 @@ await_barrier_reached() {
   [ "$(unread_count alice)" -eq 0 ]
 }
 
+@test "inbox and history: malformed UTF-8 message bodies do not abort reads" {
+  bash "$SCRIPTS/send.sh" testteam bob alice "seed body"
+  local db
+  db="$(cd "$TEST_SKILL_DIR" && bash -c '. scripts/lib/storage.sh; agmsg_storage_load; agmsg_db_path testteam')"
+  sqlite3 "$db" "UPDATE events SET body=CAST(X'76616c696480626164' AS TEXT) WHERE type='message_sent' AND team='testteam';"
+
+  run env LC_ALL=en_US.UTF-8 bash "$SCRIPTS/inbox.sh" testteam alice
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"new message(s)"* ]] || return 1
+
+  run env LC_ALL=en_US.UTF-8 bash "$SCRIPTS/history.sh" testteam alice
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"bad"* ]]
+}
+
 @test "inbox: --quiet is silent when there is nothing unread" {
   run bash "$SCRIPTS/inbox.sh" testteam alice --quiet
   [ "$status" -eq 0 ]

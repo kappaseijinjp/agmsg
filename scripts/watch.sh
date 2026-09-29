@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -u
+# Message bodies are opaque bytes until displayed. Keep watcher filters
+# byte-oriented so malformed UTF-8 cannot terminate a UTF-8-locale poll.
+export LC_ALL=C
 # shellcheck disable=SC1091
 source "$(cd "$(dirname "$0")" && pwd)/lib/compat.sh"
 

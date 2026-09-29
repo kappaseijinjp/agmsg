@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Message bodies are opaque bytes until displayed. Keep text filters and locale
+# classification byte-oriented so malformed UTF-8 in a legacy row cannot abort
+# history under a UTF-8 locale.
+export LC_ALL=C
 
 # Usage: history.sh <team> [agent_id] [limit]
 # Shows message history. If agent_id given, shows only that agent's messages.

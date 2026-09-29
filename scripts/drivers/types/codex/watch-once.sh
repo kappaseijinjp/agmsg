@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Message bodies are opaque bytes until displayed. Keep polling filters
+# byte-oriented so malformed UTF-8 cannot make an unread message disappear.
+export LC_ALL=C
 
 # One-shot pending-message oracle for the Codex app-server bridge.
 #

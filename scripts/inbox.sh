@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Message bodies are opaque bytes until displayed. Keep text filters and locale
+# classification byte-oriented so malformed UTF-8 in a legacy row cannot abort
+# delivery under a UTF-8 locale.
+export LC_ALL=C
 
 # Usage: inbox.sh <team> <agent_id> [--quiet]
 # Shows unread messages and marks them as read.

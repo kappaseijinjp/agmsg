@@ -113,6 +113,18 @@ _assert_startup_was_delayed() {
   [[ "$output" =~ "hello pending" ]]
 }
 
+@test "watch-once: malformed UTF-8 message bodies remain deliverable under UTF-8 locale" {
+  bash "$SCRIPTS/send.sh" team bob alice "seed body" >/dev/null
+  local db
+  db="$(cd "$TEST_SKILL_DIR" && bash -c '. scripts/lib/storage.sh; agmsg_storage_load; agmsg_db_path team')"
+  sqlite3 "$db" "UPDATE events SET body=CAST(X'76616c696480626164' AS TEXT) WHERE type='message_sent' AND team='team';"
+
+  run env LC_ALL=en_US.UTF-8 bash "$TYPES/codex/watch-once.sh" "$PROJ" codex \
+    --name alice --team team --timeout 2 --interval 1
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "status=pending" ]]
+}
+
 # --- argv-length regression (#777) --------------------------------------
 #
 # This pair's unread ids used to be embedded into ONE argv element for
