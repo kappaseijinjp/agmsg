@@ -210,7 +210,7 @@ codex:
   --dangerously-skip-permissions: false  # `false`の値はフラグ自体を出力しない
 ```
 
-10種類のエージェントタイプのうち8つがspawn可能 — `claude-code`、`codex`、`grok-build`、`cursor`、`gemini`、`antigravity`、`copilot`、`opencode`。`hermes` は、初期プロンプトを事前に仕込んだインタラクティブセッションを開始する既知のCLIモードがないためspawn不可（#279）。`devin` は、同等のインタラクティブ起動方法がまだ検証されていないため、現時点ではspawnableとして扱っていない。macOSが主なターゲットで、LinuxとWindowsはベストエフォート（ターミナルが未対応の場合はissueまたはPRを歓迎）。ヘッドレス環境 — tmuxもなく使えるターミナルもない — はエージェントCLIがインタラクティブなターミナルを必要とするためエラーになる。
+11種類のエージェントタイプのうち9つがspawn可能 — `claude-code`、`codex`、`grok-build`、`cursor`、`gemini`、`antigravity`、`copilot`、`opencode`、`pi`。`hermes` は、初期プロンプトを事前に仕込んだインタラクティブセッションを開始する既知のCLIモードがないためspawn不可（#279）。`devin` は、同等のインタラクティブ起動方法がまだ検証されていないため、現時点ではspawnableとして扱っていない。macOSが主なターゲットで、LinuxとWindowsはベストエフォート（ターミナルが未対応の場合はissueまたはPRを歓迎）。ヘッドレス環境 — tmuxもなく使えるターミナルもない — はエージェントCLIがインタラクティブなターミナルを必要とするためエラーになる。
 
 ### spawnしたエージェントを終了する（`despawn`）
 
@@ -313,6 +313,16 @@ $agmsg
 これによりOpenCodeは、Ollamaのようなローカルプロバイダーを使う構成を含め、ローカルのコーディングエージェントとして役立つ。
 
 完全なセットアップ手順は [docs/opencode.md](docs/opencode.md) を参照。
+
+### pi
+
+```
+/skill:agmsg
+```
+
+`./install.sh` でインストールする。pi の設定ルート（`~/.pi/agent/`、または `$PI_CODING_AGENT_DIR`）が存在する場合、そこに pi 向けスキル `skills/agmsg/SKILL.md` と配送用の拡張 `extensions/agmsg/index.ts` を配置する。Codex 向けの共有スキルは変更しない。pi は `mode monitor`（拡張の `agmsg_watch` ツールが `watch.sh` の出力を会話へ流す）、`mode turn`（拡張が実行のたびに受信箱を確認する）、`mode off` に対応。`spawn pi` は actas プロンプトを pi の位置引数のメッセージ（`/skill:agmsg actas <name>`）として渡し、席の再開には `--session <id>` を使う。`both` は非対応。
+
+詳細は [docs/pi.md](docs/pi.md) を参照。
 
 ### シェル（任意のエージェント）
 

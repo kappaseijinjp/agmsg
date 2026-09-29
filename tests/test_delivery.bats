@@ -2518,6 +2518,46 @@ JSON
   [ "$allow_len" = "600" ]
 }
 
+# --- pi agent tests ---
+# pi reads no hook file; the global pi extension reads a one-line marker.
+
+@test "pi set monitor: writes the delivery marker the pi extension reads" {
+  run bash "$SCRIPTS/delivery.sh" set monitor pi "$TEST_PROJECT"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$TEST_PROJECT/.pi/agmsg-delivery")" = "mode: monitor" ]
+  run bash "$SCRIPTS/delivery.sh" status pi "$TEST_PROJECT"
+  [ "$(printf '%s\n' "$output" | sed -n 1p)" = "mode: monitor" ]
+}
+
+@test "pi set turn then off: rewrites, then removes the marker" {
+  bash "$SCRIPTS/delivery.sh" set turn pi "$TEST_PROJECT" >/dev/null
+  [ "$(cat "$TEST_PROJECT/.pi/agmsg-delivery")" = "mode: turn" ]
+  run bash "$SCRIPTS/delivery.sh" status pi "$TEST_PROJECT"
+  [ "$(printf '%s\n' "$output" | sed -n 1p)" = "mode: turn" ]
+  bash "$SCRIPTS/delivery.sh" set off pi "$TEST_PROJECT" >/dev/null
+  [ ! -e "$TEST_PROJECT/.pi/agmsg-delivery" ]
+}
+
+@test "pi status without a marker uses the off wording spawn's readiness gate recognizes" {
+  run bash "$SCRIPTS/delivery.sh" status pi "$TEST_PROJECT"
+  [ "$(printf '%s\n' "$output" | sed -n 1p)" = "mode: off (no agmsg delivery hooks installed for this project)" ]
+}
+
+@test "pi status reports an unreadable marker as unrecognized, not as off" {
+  mkdir -p "$TEST_PROJECT/.pi"
+  echo 'mode: sideways' > "$TEST_PROJECT/.pi/agmsg-delivery"
+  run bash "$SCRIPTS/delivery.sh" status pi "$TEST_PROJECT"
+  [[ "$(printf '%s\n' "$output" | sed -n 1p)" == "mode: off (unrecognized: "* ]]
+}
+
+@test "pi rejects both mode and keeps an existing marker" {
+  bash "$SCRIPTS/delivery.sh" set turn pi "$TEST_PROJECT" >/dev/null
+  run bash "$SCRIPTS/delivery.sh" set both pi "$TEST_PROJECT"
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "not supported" ]] || return 1
+  [ "$(cat "$TEST_PROJECT/.pi/agmsg-delivery")" = "mode: turn" ]
+}
+
 # --- opencode agent tests ---
 
 @test "opencode is accepted as an agent type (turn mode)" {

@@ -391,7 +391,8 @@ _uninstall_one() {
   for _dedicated_dir_label in \
     "$HOME/.config/opencode/skills/$SKILL_NAME|OpenCode" \
     "$HOME/.hermes/skills/$SKILL_NAME|Hermes" \
-    "$HOME/.grok/skills/$SKILL_NAME|Grok Build"
+    "$HOME/.grok/skills/$SKILL_NAME|Grok Build" \
+    "${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/skills/$SKILL_NAME|pi"
   do
     _dedicated_dir="${_dedicated_dir_label%%|*}"
     _dedicated_label="${_dedicated_dir_label#*|}"
@@ -406,6 +407,19 @@ _uninstall_one() {
     fi
   done
   unset _dedicated_dir_label _dedicated_dir _dedicated_label
+
+  # pi delivery extension (install.sh install_pi_files). Removed only when it
+  # is the file this install rendered: it names this install's SKILL_DIR.
+  local _pi_ext_dir="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/extensions/$SKILL_NAME"
+  if [ -f "$_pi_ext_dir/index.ts" ] && grep -Fq "const SKILL_DIR = \"$SKILL_DIR\";" "$_pi_ext_dir/index.ts" 2>/dev/null; then
+    rm -f "$_pi_ext_dir/index.ts"
+    if rmdir "$_pi_ext_dir" 2>/dev/null; then
+      echo "  - removed /$SKILL_NAME pi delivery extension"
+    else
+      echo "  - removed /$SKILL_NAME pi delivery extension (index.ts only; $_pi_ext_dir left in place, not empty)"
+    fi
+    REMOVED=true
+  fi
 }
 
 # Machine-wide pieces, shared by every install: only safe to remove once NO

@@ -43,11 +43,11 @@ write_node_launcher_fixtures() {
   printf '// stub node launcher fixture\n' > "$nd/nodetype-launcher.mjs"
 }
 
-@test "type-registry: known_types lists the twelve built-ins" {
+@test "type-registry: known_types lists the thirteen built-ins" {
   run env -i PATH="$PATH" bash -c \
     "source '$SCRIPTS/lib/type-registry.sh'; agmsg_known_types | sort -u | paste -sd, -"
   [ "$status" -eq 0 ]
-  [ "$output" = "agmsg-app,antigravity,claude-code,codex,copilot,cursor,devin,ext-tool,gemini,grok-build,hermes,opencode" ]
+  [ "$output" = "agmsg-app,antigravity,claude-code,codex,copilot,cursor,devin,ext-tool,gemini,grok-build,hermes,opencode,pi" ]
 }
 
 @test "type-registry: sourcing alone does not compute the renderable-types list (#631)" {
@@ -134,6 +134,7 @@ write_node_launcher_fixtures() {
   grep -Fq 'hermes is not spawnable' "$(render_type hermes)"
   grep -Fq 'Grok Build' "$(render_type grok-build)"
   grep -Fq 'OpenCode monitor' "$(render_type opencode)"
+  grep -Fq 'agmsg_watch' "$(render_type pi)"
 }
 
 renderer_failure_fixture() {
@@ -297,7 +298,7 @@ EOF
   done <<<"$renderable_types"
 }
 
-@test "type-registry: spawnable set is exactly eight of the eleven built-ins (#277, #279)" {
+@test "type-registry: spawnable set is exactly nine of the built-ins (#277, #279)" {
   # hermes and devin deliberately stay out (#279): no known CLI mode starts them
   # interactive with a seeded initial prompt. agmsg-app also stays out: it's
   # the desktop app itself (spawnable=no), not a spawnable agent type.
@@ -308,7 +309,7 @@ EOF
        [ \"\$(agmsg_type_get \"\$t\" spawnable)\" = yes ] && echo \"\$t\"
      done <<< \"\$(agmsg_known_types | sort -u)\" | paste -sd, -"
   [ "$status" -eq 0 ]
-  [ "$output" = "antigravity,claude-code,codex,copilot,cursor,gemini,grok-build,opencode" ]
+  [ "$output" = "antigravity,claude-code,codex,copilot,cursor,gemini,grok-build,opencode,pi" ]
 }
 
 @test "type-registry: detection manifests carry the expected env / proc keys" {
@@ -321,6 +322,9 @@ EOF
   [ "$(g antigravity detect)" = "explicit" ]
   [ "$(g copilot detect)" = "explicit" ]
   [ "$(g opencode detect_proc)" = "opencode opencode-*" ]
+  [ "$(g pi detect)" = "PI_CODING_AGENT" ]
+  [ "$(g pi session_env)" = "PI_SESSION_ID" ]
+  [ "$(g pi detect_proc)" = "pi" ]
 }
 
 @test "type-registry: no manifest key is named 'monitor' -- delivery_modes alone answers mode support (#1214)" {
@@ -415,6 +419,49 @@ EOF
     "source '$SCRIPTS/lib/type-registry.sh'; source '$SCRIPTS/lib/compat.sh'; source '$SCRIPTS/lib/detect-cli-type.sh'; compat_get_comm() { :; }; compat_get_ppid() { :; }; agmsg_detect_cli_type >/dev/null; echo \"defaulted=\$_AGMSG_DETECT_CLI_TYPE_DEFAULTED out=\$_AGMSG_DETECT_CLI_TYPE_OUT\""
   [ "$status" -eq 0 ]
   [ "$output" = "defaulted=0 out=codex" ]
+}
+
+@test "type-registry: pi is detected from PI_CODING_AGENT or its process title" {
+  run env -i PATH="$PATH" PI_CODING_AGENT=true bash -c \
+    "source '$SCRIPTS/lib/type-registry.sh'; source '$SCRIPTS/lib/compat.sh'; source '$SCRIPTS/lib/detect-cli-type.sh'; compat_get_comm() { :; }; compat_get_ppid() { :; }; agmsg_detect_cli_type"
+  [ "$status" -eq 0 ]
+  [ "$output" = pi ]
+  run env -i PATH="$PATH" bash -c \
+    "source '$SCRIPTS/lib/type-registry.sh'; source '$SCRIPTS/lib/compat.sh'; source '$SCRIPTS/lib/detect-cli-type.sh'; compat_get_comm() { echo pi; }; compat_get_ppid() { echo 1; }; agmsg_detect_cli_type"
+  [ "$status" -eq 0 ]
+  [ "$output" = pi ]
+}
+
+@test "type-registry: a Claude Code session started inside pi stays claude-code" {
+  # PI_CODING_AGENT is inherited by every child of pi, so it must not outrank a
+  # child runtime's own session marker.
+  run env -i PATH="$PATH" PI_CODING_AGENT=true CLAUDE_CODE_SESSION_ID=x bash -c \
+    "source '$SCRIPTS/lib/type-registry.sh'; source '$SCRIPTS/lib/compat.sh'; source '$SCRIPTS/lib/detect-cli-type.sh'; compat_get_comm() { :; }; compat_get_ppid() { :; }; agmsg_detect_cli_type"
+  [ "$status" -eq 0 ]
+  [ "$output" = claude-code ]
+}
+
+@test "pi transcript hook finds a session file by id under each pi session root" {
+  local tdir="$SCRIPTS/drivers/types/pi" id=01a0ec38-6187-726a-8ace-db8f718bd072
+  local root="$BATS_TEST_TMPDIR/sessions"
+  mkdir -p "$root/--tmp-proj--"
+  : > "$root/--tmp-proj--/2026-09-29T08-11-53-096Z_$id.jsonl"
+  run env -i PATH="$PATH" PI_CODING_AGENT_SESSION_DIR="$root" bash -c \
+    ". '$tdir/_transcript-exists.sh'; agmsg_transcript_exists $id /tmp/proj"
+  [ "$status" -eq 0 ]
+  run env -i PATH="$PATH" PI_CODING_AGENT_DIR="$BATS_TEST_TMPDIR" bash -c \
+    ". '$tdir/_transcript-exists.sh'; agmsg_transcript_exists $id /tmp/proj"
+  [ "$status" -eq 0 ]
+  run env -i PATH="$PATH" HOME="$BATS_TEST_TMPDIR/empty" bash -c \
+    ". '$tdir/_transcript-exists.sh'; agmsg_transcript_exists $id /tmp/proj"
+  [ "$status" -ne 0 ]
+  # An id carrying a path separator is refused: without the check, "b/c"
+  # would match <root>/<dir>/a_b/c.jsonl, a file that is not a session.
+  mkdir -p "$root/--tmp-proj--/a_b"
+  : > "$root/--tmp-proj--/a_b/c.jsonl"
+  run env -i PATH="$PATH" PI_CODING_AGENT_SESSION_DIR="$root" bash -c \
+    ". '$tdir/_transcript-exists.sh'; agmsg_transcript_exists b/c /tmp/proj"
+  [ "$status" -ne 0 ]
 }
 
 @test "type-registry: a process marker beats a shared Gemini credential" {

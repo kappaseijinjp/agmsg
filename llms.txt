@@ -58,6 +58,7 @@ plugin marketplace (`/plugin marketplace add fujibee/agmsg`). All paths land at
 - [docs/spec/driver-interface.md](docs/spec/driver-interface.md): the formal driver contract.
 - [docs/adr/](docs/adr/): architecture decision records (the "why").
 - [docs/opencode.md](docs/opencode.md): OpenCode-specific integration.
+- [docs/pi.md](docs/pi.md): pi-specific integration.
 - [CONTRIBUTING.md](CONTRIBUTING.md): how to propose changes.
 
 ## Key source files

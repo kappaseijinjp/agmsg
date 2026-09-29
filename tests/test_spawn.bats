@@ -10,7 +10,7 @@ setup() {
   # a terminal. PATH is prepended so the stubs win.
   export STUB_BIN="$TEST_SKILL_DIR/stub-bin"
   mkdir -p "$STUB_BIN"
-  for bin in claude codex grok hermes cursor-agent gemini agy copilot opencode; do
+  for bin in claude codex grok hermes cursor-agent gemini agy copilot opencode pi; do
     printf '#!/usr/bin/env bash\nexit 0\n' > "$STUB_BIN/$bin"
     chmod +x "$STUB_BIN/$bin"
   done
@@ -470,6 +470,22 @@ seed_resumable() {
   [ "$status" -eq 0 ]
   run grep -F "/$cmd"'\ actas' "$boot"
   [ "$status" -ne 0 ]
+}
+
+@test "spawn: pi launches pi with the actas prompt as a bare positional /skill: command" {
+  bash "$SCRIPTS/join.sh" myteam existing claude-code "$PROJ"
+  run bash "$SCRIPTS/spawn.sh" pi alice --project "$PROJ" --model openai/gpt-6-luna --no-wait
+  [ "$status" -eq 0 ]
+  boot="$(cat "$CAPTURE")"
+  run cat "$boot"
+  [[ "$output" == *"pi --model openai/gpt-6-luna"* ]] || return 1
+  # No name_arg (type.conf explains why): no --name is passed.
+  refute grep -Fq -- '--name' "$boot"
+  refute grep -Fq -- '--prompt' "$boot"
+  # pi runs a skill as `/skill:<name>` (type.conf cmd_prefix).
+  local cmd; cmd="$(basename "$TEST_SKILL_DIR")"
+  run grep -F "/skill:$cmd"'\ actas\ alice' "$boot"
+  [ "$status" -eq 0 ]
 }
 
 @test "spawn: prompt_arg lands after spawn-options, immediately before the prompt" {

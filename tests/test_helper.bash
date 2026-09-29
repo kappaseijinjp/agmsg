@@ -34,6 +34,10 @@ unset CLAUDE_CONFIG_DIR
 # of whatever the fixture set up, silently changing which branch a test
 # exercises. Tests that deliberately model a caller set these explicitly.
 unset AGMSG_SESSION_ID CLAUDE_CODE_SESSION_ID CODEX_THREAD_ID
+# pi marks every child process with PI_CODING_AGENT=true (whoami detect=) and
+# its bash tool with PI_SESSION_ID; a suite run from inside pi would otherwise
+# detect the developer's own pi session.
+unset PI_CODING_AGENT PI_SESSION_ID
 export AGMSG_SELF_NAME=off
 
 setup_test_env() {
